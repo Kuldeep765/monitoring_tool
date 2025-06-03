@@ -18,7 +18,7 @@ app.set("views", path.join(__dirname, "views"));
 
 // Homepage to enter URL
 app.get("/", (req, res) => {
-  res.render("./views/index.ejs");
+  res.render("index"); // no need for "./views/index.ejs"
 });
 
 // Preview page with URL inside iframe
