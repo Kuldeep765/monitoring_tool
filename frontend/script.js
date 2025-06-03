@@ -19,8 +19,11 @@ document.getElementById("loadBtn").onclick = () => {
 
 overlay.addEventListener("mousedown", (e) => {
   const rect = overlay.getBoundingClientRect();
-  startX = e.clientX - rect.left;
-  startY = e.clientY - rect.top;
+  const iframeRect = iframe.getBoundingClientRect();
+  startX = e.clientX - iframeRect.left;
+  startY = e.clientY - iframeRect.top;
+
+  console.log('Selection started at:', { x: startX, y: startY });
 
   box = document.createElement("div");
   box.className = "selection-box";
@@ -56,11 +59,22 @@ overlay.addEventListener("mouseup", () => {
   if (!box) return;
 
   const rect = box.getBoundingClientRect();
-  const parentRect = overlay.getBoundingClientRect();
+  const iframeRect = iframe.getBoundingClientRect();
+
+  // Calculate final dimensions
+  const finalCoords = {
+    left: rect.left - iframeRect.left,
+    top: rect.top - iframeRect.top,
+    width: rect.width,
+    height: rect.height
+  };
+
+  console.log('Selection ended with dimensions:', finalCoords);
+  selections.push(finalCoords);
 
   // Position plus icon near the bottom right of selection box
-  plusIcon.style.left = `${rect.right - parentRect.left - 15}px`; // center plus icon on corner
-  plusIcon.style.top = `${rect.bottom - parentRect.top - 15}px`;
+  plusIcon.style.left = `${rect.right - iframeRect.left - 15}px`;
+  plusIcon.style.top = `${rect.bottom - iframeRect.top - 15}px`;
   plusIcon.style.display = "block";
 
   // Store current box in a temporary variable, will be saved when plus is clicked
@@ -70,19 +84,26 @@ overlay.addEventListener("mouseup", () => {
 
 // When user clicks plus icon, save the selection and finalize it
 plusIcon.onclick = () => {
-  if (!plusIcon.currentBox) return;
+  console.log('Plus icon clicked');
+  if (!plusIcon.currentBox) {
+    console.log('No current box found');
+    return;
+  }
 
   const rect = plusIcon.currentBox.getBoundingClientRect();
-  const parentRect = overlay.getBoundingClientRect();
+  const iframeRect = iframe.getBoundingClientRect();
 
   const relativeCoords = {
-    left: rect.left - parentRect.left,
-    top: rect.top - parentRect.top,
-    width: rect.width,
-    height: rect.height
+    left: Math.round(rect.left - iframeRect.left),
+    top: Math.round(rect.top - iframeRect.top),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height)
   };
 
+  console.log('Adding selection with coordinates:', relativeCoords);
+  console.log('Current selections:', selections);
   selections.push(relativeCoords);
+  console.log('Updated selections array:', selections);
 
   // Mark selection box as confirmed: solid border and remove dashed style
   plusIcon.currentBox.style.border = "2px solid #007048";
@@ -95,7 +116,12 @@ plusIcon.onclick = () => {
 
 document.getElementById("saveBtn").onclick = async () => {
   const url = document.getElementById("urlInput").value;
+  console.log('Save button clicked');
+  console.log('Current URL:', url);
+  console.log('All selections:', JSON.stringify(selections, null, 2));
+  
   if (!url || selections.length === 0) {
+    console.log('No selections to save');
     alert("Please enter a URL and select at least one region.");
     return;
   }
