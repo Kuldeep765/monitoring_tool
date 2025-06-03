@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Comparison Results</title>
+</head>
+<body>
+  <h2>Visual Differences Found</h2>
+  <% if (files.length === 0) { %>
+    <p>No differences found 🎉</p>
+  <% } else { %>
+    <% files.forEach(file => { %>
+      <div style="margin: 20px;">
+        <img src="/../data/diffs/<%= file %>" width="400" />
+        <p><%= file %></p>
+      </div>
+    <% }) %>
+  <% } %>
+</body>
+</html>

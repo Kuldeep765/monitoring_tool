@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Select Regions</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <h2>Select Regions to Monitor</h2>
+  <div id="frame-container">
+    <iframe id="webview" src="<%= url %>" width="100%" height="600px"></iframe>
+    <canvas id="selectorCanvas"></canvas>
+  </div>
+  <button id="saveBtn">Save Selection</button>
+
+  <script>
+    const url = "<%= url %>";
+  </script>
+  <script src="/js/overlay.js"></script>
+</body>
+</html>
