@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Web Monitor</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="controls">
+    <input type="text" id="urlInput" placeholder="Enter a URL" />
+    <button id="loadBtn">Load</button>
+    <button id="saveBtn">Save Regions</button>
+  </div>
+  <div id="viewer">
+    <iframe id="webframe" sandbox="allow-same-origin allow-scripts allow-forms" style="width:100%; height:80vh;"></iframe>
+    <div id="overlay"></div>
+  </div>
+  
+  <script src="script.js"></script>
+</body>
+</html>
