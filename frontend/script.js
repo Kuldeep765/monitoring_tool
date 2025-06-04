@@ -5,16 +5,83 @@ const overlay = document.getElementById("overlay");
 const iframe = document.getElementById("webframe");
 const plusIcon = document.getElementById("plusIcon");
 
-document.getElementById("loadBtn").onclick = () => {
+document.getElementById("loadBtn").onclick = async () => {
   const url = document.getElementById("urlInput").value;
   if (!url.startsWith("http")) {
     alert("Please enter a valid URL (starting with http/https)");
     return;
   }
-  iframe.src = url;
+  
+  // Show loading state
+  const loadBtn = document.getElementById("loadBtn");
+  loadBtn.disabled = true;
+  loadBtn.textContent = "Loading...";
+  
+  // Clear previous content
+  iframe.src = 'about:blank';
   selections.length = 0;
   overlay.innerHTML = '';
   plusIcon.style.display = 'none';
+
+  try {
+    // Create loading indicator
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.style.position = 'fixed';
+    loadingIndicator.style.top = '50%';
+    loadingIndicator.style.left = '50%';
+    loadingIndicator.style.transform = 'translate(-50%, -50%)';
+    loadingIndicator.style.padding = '20px';
+    loadingIndicator.style.background = 'rgba(0,0,0,0.8)';
+    loadingIndicator.style.color = 'white';
+    loadingIndicator.style.borderRadius = '5px';
+    loadingIndicator.style.zIndex = '10000';
+    loadingIndicator.textContent = 'Loading page...';
+    document.body.appendChild(loadingIndicator);
+
+    // Use the proxy endpoint
+    const proxyUrl = `http://localhost:3000/proxy?url=${encodeURIComponent(url)}`;
+    
+    // Setup iframe load handling
+    const loadPromise = new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Loading timeout exceeded'));
+      }, 30000);
+
+      iframe.onload = () => {
+        clearTimeout(timeoutId);
+        resolve();
+      };
+
+      iframe.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Failed to load content'));
+      };
+
+      // Set iframe source
+      iframe.src = proxyUrl;
+    });
+
+    // Wait for iframe to load
+    await loadPromise;
+
+    // Update overlay size after a short delay to ensure content is rendered
+    setTimeout(() => {
+      overlay.style.width = iframe.offsetWidth + 'px';
+      overlay.style.height = iframe.offsetHeight + 'px';
+    }, 1000);
+
+  } catch (error) {
+    console.error('Error loading page:', error);
+    alert('Failed to load the webpage. Please try again or check if the URL is accessible.');
+  } finally {
+    // Cleanup
+    loadBtn.disabled = false;
+    loadBtn.textContent = "Load";
+    const loadingIndicator = document.querySelector('[style*="position: fixed"]');
+    if (loadingIndicator) {
+      document.body.removeChild(loadingIndicator);
+    }
+  }
 };
 
 overlay.addEventListener("mousedown", (e) => {

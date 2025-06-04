@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import fs from "fs/promises";
 import path from "path";
+import puppeteer from "puppeteer";
 import { captureMaster, compareScreens } from "./utils/screenshot.js";
 import { saveCoords, getCoords } from "./utils/storage.js";
 
@@ -66,6 +67,126 @@ app.get("/api/compare", async (req, res) => {
   const selections = await getCoords(url);
   await compareScreens(url, selections);
   res.json({ success: true, message: "Comparison done" });
+});
+
+app.get("/proxy", async (req, res) => {
+  let browser = null;
+  
+  try {
+    const targetUrl = req.query.url;
+    
+    if (!targetUrl) {
+      return res.status(400).json({ error: "URL parameter is required" });
+    }
+
+    // Launch browser with minimal features
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-site-isolation-trials'
+      ]
+    });
+
+    const page = await browser.newPage();
+    
+    // Set a reasonable viewport
+    await page.setViewport({ width: 1366, height: 768 });
+
+    // Setup request interception
+    await page.setRequestInterception(true);
+    page.on('request', request => {
+      const resourceType = request.resourceType();
+      // Allow only essential resources
+      if (['document', 'script', 'stylesheet', 'xhr', 'fetch'].includes(resourceType)) {
+        request.continue();
+      } else {
+        request.abort();
+      }
+    });
+
+    // Navigate to page with basic timeout
+    await page.goto(targetUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 30000
+    });
+
+    // Modify page content to handle CSP and prepare for proxying
+    await page.evaluate(() => {
+      // Remove all CSP meta tags
+      document.querySelectorAll('meta').forEach(meta => {
+        const content = meta.getAttribute('content') || '';
+        if (content.includes('frame-ancestors') || 
+            content.includes('content-security-policy')) {
+          meta.remove();
+        }
+      });
+
+      // Convert all relative URLs to absolute
+      const baseUrl = window.location.origin;
+      document.querySelectorAll('link[rel="stylesheet"], script[src], img[src], a[href]').forEach(el => {
+        ['src', 'href'].forEach(attr => {
+          if (el[attr]) {
+            try {
+              if (el[attr].startsWith('//')) {
+                el[attr] = 'https:' + el[attr];
+              } else if (el[attr].startsWith('/')) {
+                el[attr] = baseUrl + el[attr];
+              } else if (!el[attr].startsWith('http')) {
+                el[attr] = new URL(el[attr], baseUrl).href;
+              }
+            } catch (e) {}
+          }
+        });
+      });
+
+      // Override any frame blocking scripts
+      const script = document.createElement('script');
+      script.textContent = `
+        if (window.top !== window.self) {
+          window.top.location = window.self.location;
+          window.frameElement = null;
+        }
+      `;
+      document.head.appendChild(script);
+    });
+
+    // Get the modified content
+    const content = await page.content();
+
+    // Set headers for proper rendering
+    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('X-Frame-Options', 'ALLOWALL');
+    // Set a very permissive CSP
+    res.setHeader('Content-Security-Policy', 
+      "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+      "frame-ancestors *; " +
+      "img-src * data: blob: 'unsafe-inline'; " +
+      "style-src * 'unsafe-inline'; " +
+      "script-src * 'unsafe-inline' 'unsafe-eval'; " +
+      "connect-src * 'unsafe-inline';"
+    );
+
+    // Send the modified content
+    res.send(content);
+
+  } catch (error) {
+    console.error("Proxy error:", error);
+    res.status(500).json({ 
+      error: "Error proxying the request", 
+      message: error.message 
+    });
+  } finally {
+    if (browser) {
+      await browser.close().catch(console.error);
+    }
+  }
 });
 
 // Error handling middleware
