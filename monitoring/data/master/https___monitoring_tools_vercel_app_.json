@@ -1,0 +1,53 @@
+{
+  "url": "https://monitoring-tools.vercel.app/",
+  "coords": [
+    {
+      "left": 8,
+      "top": 68,
+      "width": 0,
+      "height": 0
+    },
+    {
+      "left": 186,
+      "top": 76,
+      "width": 292,
+      "height": 96
+    },
+    {
+      "left": 521,
+      "top": 145,
+      "width": 666,
+      "height": 191
+    },
+    {
+      "left": 444,
+      "top": 366,
+      "width": 828,
+      "height": 208
+    },
+    {
+      "left": 974,
+      "top": 84,
+      "width": 216,
+      "height": 7
+    },
+    {
+      "left": 1190,
+      "top": 91,
+      "width": 262,
+      "height": 43
+    },
+    {
+      "left": 969,
+      "top": 517,
+      "width": 0,
+      "height": 0
+    },
+    {
+      "left": 336,
+      "top": 278,
+      "width": 838,
+      "height": 298
+    }
+  ]
+}

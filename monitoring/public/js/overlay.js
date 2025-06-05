@@ -13,27 +13,58 @@ const ctx = canvas.getContext("2d");
 let isDrawing = false;
 let startX, startY;
 
-canvas.addEventListener("mousedown", e => {
+canvas.addEventListener("mousemove", (e) => {
+  if (!isDrawing) return;
+  const currentX = e.pageX;
+  const currentY = e.pageY;
+
+  const width = currentX - startX;
+  const height = currentY - startY;
+
+  canvas.style.left = window.scrollX + "px";
+  canvas.style.top = window.scrollY + "px";
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(startX - window.scrollX, startY - window.scrollY, width, height);
+});
+
+
+canvas.addEventListener("mousedown", (e) => {
   isDrawing = true;
-  startX = e.offsetX;
-  startY = e.offsetY;
+  startX = e.pageX;
+  startY = e.pageY;
 });
 
 canvas.addEventListener("mouseup", e => {
   isDrawing = false;
+  const endX = e.pageX;
+  const endY = e.pageY;
+
   const rect = {
-    left: Math.min(startX, e.offsetX),
-    top: Math.min(startY, e.offsetY),
-    width: Math.abs(e.offsetX - startX),
-    height: Math.abs(e.offsetY - startY)
+    left: Math.min(startX, endX),
+    top: Math.min(startY, endY),
+    width: Math.abs(endX - startX),
+    height: Math.abs(endY - startY)
   };
   selections.push(rect);
+
+  // Draw all selections so far
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
-  ctx.strokeRect(rect.left, rect.top, rect.width, rect.height);
+  for (const sel of selections) {
+    ctx.strokeRect(sel.left - window.scrollX, sel.top - window.scrollY, sel.width, sel.height);
+  }
 });
 
+
 document.getElementById("saveBtn").addEventListener("click", async () => {
+  if (selections.length === 0) {
+    alert("Please select at least one region.");
+    return;
+  }
   const response = await fetch("/api/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -41,7 +72,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
   });
 
   if (response.ok) {
-    alert("Saved! You can now compare.");
+    alert("Saved! Screenshots captured.");
   } else {
     alert("Failed to save.");
   }
