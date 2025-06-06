@@ -27,9 +27,13 @@ canvas.addEventListener("mousemove", (e) => {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
-  ctx.strokeRect(startX - window.scrollX, startY - window.scrollY, width, height);
+  ctx.strokeRect(
+    startX - window.scrollX,
+    startY - window.scrollY,
+    width,
+    height
+  );
 });
-
 
 canvas.addEventListener("mousedown", (e) => {
   isDrawing = true;
@@ -37,25 +41,35 @@ canvas.addEventListener("mousedown", (e) => {
   startY = e.pageY;
 });
 
-canvas.addEventListener("mouseup", e => {
+canvas.addEventListener("mouseup", (e) => {
   isDrawing = false;
   const endX = e.pageX;
   const endY = e.pageY;
 
-  const rect = {
-    left: Math.min(startX, endX),
-    top: Math.min(startY, endY),
-    width: Math.abs(endX - startX),
-    height: Math.abs(endY - startY)
-  };
-  selections.push(rect);
+  const width = Math.abs(endX - startX);
+  const height = Math.abs(endY - startY);
 
-  // Draw all selections so far
+  const rect = {
+    left: Math.min(startX, endX) - iframe.offsetLeft + window.scrollX,
+    top: Math.min(startY, endY) - iframe.offsetTop + window.scrollY,
+    width,
+    height,
+  };
+
+  if (width > 0 && height > 0) {
+    selections.push(rect);
+  }
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
   for (const sel of selections) {
-    ctx.strokeRect(sel.left - window.scrollX, sel.top - window.scrollY, sel.width, sel.height);
+    ctx.strokeRect(
+      sel.left - window.scrollX,
+      sel.top - window.scrollY,
+      sel.width,
+      sel.height
+    );
   }
 });
 
@@ -68,7 +82,7 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
   const response = await fetch("/api/save", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, selections })
+    body: JSON.stringify({ url, selections }),
   });
 
   if (response.ok) {

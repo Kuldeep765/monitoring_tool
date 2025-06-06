@@ -6,19 +6,31 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export async function saveCoords(url, coords) {
+// utils/storage.js
+export async function saveCoords(url, regionData) {
   const safeName = url.replace(/[^a-z0-9]/gi, "_");
   const filePath = path.join(__dirname, "../data/master", `${safeName}.json`);
   const dir = path.dirname(filePath);
 
   try {
     await mkdir(dir, { recursive: true });
-    await writeFile(filePath, JSON.stringify({ url, coords }, null, 2));
+
+    // Create a JSON object with uuid as key
+    const objectMap = {};
+    for (const item of regionData) {
+      objectMap[item.id] = {
+        coords: item.coords,
+        imageurl: item.imageurl,
+      };
+    }
+
+    await writeFile(filePath, JSON.stringify({ url, regions: objectMap }, null, 2));
   } catch (err) {
-    console.error("Failed to save coords:", err);
+    console.error("Failed to save region data:", err);
     throw err;
   }
 }
+
 
 export const getCoords = async (url) => {
   const safeName = url.replace(/[^a-z0-9]/gi, "_");

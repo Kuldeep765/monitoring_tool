@@ -45,36 +45,6 @@ app.get("/", async (req, res) => {
   }
 });
 
-// app.get("/proxy", async (req, res) => {
-//   const { url } = req.query;
-
-//   if (!url || !url.startsWith("http")) {
-//     return res.status(400).send("Invalid or missing URL");
-//   }
-
-//   try {
-//     const response = await axios.get(url, {
-//       responseType: "stream",
-//       headers: {
-//         // Optional: mimic a browser to reduce blocks
-//         "User-Agent":
-//           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/90.0.4430.93 Safari/537.36",
-//       },
-//     });
-
-//     res.setHeader("Content-Type", response.headers["content-type"] || "text/html");
-
-//     // Optional: clear security headers
-//     res.removeHeader("X-Frame-Options");
-//     res.removeHeader("Content-Security-Policy");
-
-//     response.data.pipe(res);
-//   } catch (err) {
-//     console.error("Proxy Error:", err.message);
-//     res.status(500).send("Failed to load the URL.");
-//   }
-// });
-
 app.post("/api/save", async (req, res) => {
   const { url, selections } = req.body;
 
@@ -83,8 +53,8 @@ app.post("/api/save", async (req, res) => {
   }
 
   try {
-    await saveCoords(url, selections);
-    await captureMaster(url, selections);
+    const regionData = await captureMaster(url, selections); // Now returns [{id, coords, imageurl}]
+    await saveCoords(url, regionData);
     res.sendStatus(200);
   } catch (err) {
     console.error(err);
@@ -92,7 +62,7 @@ app.post("/api/save", async (req, res) => {
   }
 });
 
-// Compare and show diff results
+
 app.get("/compare", async (req, res) => {
   const url = req.query.url;
   const selections = await getCoords(url);
@@ -107,3 +77,4 @@ app.get("/compare", async (req, res) => {
 app.listen(3000, () => {
   console.log("🚀 Backend running on http://localhost:3000");
 });
+

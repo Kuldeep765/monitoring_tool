@@ -7,9 +7,11 @@ import { v4 as uuidv4 } from "uuid";
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 export async function captureMaster(url, coords) {
+  const result = [];
+
   if (!coords || coords.length === 0) {
     console.log("No coords to capture.");
-    return;
+    return result;
   }
 
   const driver = await new Builder()
@@ -34,6 +36,7 @@ export async function captureMaster(url, coords) {
 
     await fs.mkdir("data/master", { recursive: true });
 
+    const newRegions = {};
     for (const region of coords) {
       const scaled = {
         left: Math.round(region.left * dpr),
@@ -42,19 +45,47 @@ export async function captureMaster(url, coords) {
         height: Math.round(region.height * dpr),
       };
 
+      if (scaled.width === 0 || scaled.height === 0) continue;
+
       const id = uuidv4();
+      const filePath = `data/master/${id}.png`;
 
-      await sharp(buffer).extract(scaled).toFile(`data/master/${id}.png`);
+      await sharp(buffer).extract(scaled).toFile(filePath);
 
-      // Save each region's coords separately or skip if you save all in one JSON file
-      // Optional: Save per-crop coords for easier diff or later processing
-      await fs.writeFile(
-        `data/master/${id}.json`,
-        JSON.stringify({ coords: region, url }, null, 2)
-      );
+      newRegions[id] = {
+        coords: region,
+        imageurl: filePath,
+      };
     }
+
+    // Read existing data
+    let existingData = {};
+    try {
+      const raw = await fs.readFile("data/master/regions.json", "utf-8");
+      existingData = JSON.parse(raw);
+    } catch (e) {
+      // No file yet, it's okay
+    }
+
+    // Merge into correct URL group
+    if (!existingData[url]) {
+      existingData[url] = {
+        regions: {},
+      };
+    }
+
+    existingData[url].regions = {
+      ...existingData[url].regions,
+      ...newRegions,
+    };
+
+    // Save updated structure
+    await fs.writeFile("data/master/regions.json", JSON.stringify(existingData, null, 2));
+
+    return result;
   } catch (err) {
     console.error("Failed to capture screenshot:", err);
+    return [];
   } finally {
     await driver.quit();
   }
