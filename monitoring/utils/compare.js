@@ -1,9 +1,8 @@
 import fs from "fs";
 import sharp from "sharp";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
 import { Builder } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
+import resemble from "resemblejs";
 
 const ensureDirExists = (dir) => {
   if (!fs.existsSync(dir)) {
@@ -26,7 +25,10 @@ export async function runFullComparison() {
     const driver = await new Builder()
       .forBrowser("chrome")
       .setChromeOptions(
-        new chrome.Options().addArguments("--headless", "--window-size=1920,1080")
+        new chrome.Options().addArguments(
+          "--headless",
+          "--window-size=1920,1080"
+        )
       )
       .build();
 
@@ -62,8 +64,16 @@ export async function runFullComparison() {
           continue;
         }
 
-        const changed = compareScreenshots(masterImagePath, newImagePath, diffImagePath);
-        console.log(`🧠 Compared ${uuid}: ${changed} pixel(s) changed.`);
+        try {
+          const mismatchPercent = await compareScreenshots(
+            masterImagePath,
+            newImagePath,
+            diffImagePath
+          );
+          console.log(`🧠 Compared ${uuid}: ${mismatchPercent}% mismatch.`);
+        } catch (err) {
+          console.error(`❌ Error comparing images for ${uuid}:`, err.message);
+        }
       }
     } catch (e) {
       console.error(`❌ Error comparing URL ${url}:`, e.message);
@@ -76,30 +86,28 @@ export async function runFullComparison() {
 }
 
 function compareScreenshots(imgPath1, imgPath2, diffPath) {
-  const img1 = PNG.sync.read(fs.readFileSync(imgPath1));
-  const img2 = PNG.sync.read(fs.readFileSync(imgPath2));
+  return new Promise((resolve, reject) => {
+    const image1 = fs.readFileSync(imgPath1);
+    const image2 = fs.readFileSync(imgPath2);
 
-  const { width, height } = img1;
-  const diff = new PNG({ width, height });
+    resemble(image1)
+      .compareTo(image2)
+      // .ignoreColors() // optionally enable to ignore color differences
+      // .ignoreAntialiasing() // optionally ignore anti-aliasing differences
+      .onComplete((data) => {
+        if (data.error) {
+          return reject(new Error(data.error));
+        }
 
-  const pixelsChanged = pixelmatch(
-    img1.data,
-    img2.data,
-    diff.data,
-    width,
-    height,
-    {
-      threshold: 0.1,
-      includeAA: true,
-      alpha: 1,
-    }
-  );
+        const misMatchPercent = parseFloat(data.misMatchPercentage);
 
-  if (pixelsChanged > 0) {
-    fs.writeFileSync(diffPath, PNG.sync.write(diff));
-  }
+        if (misMatchPercent > 0) {
+          fs.writeFileSync(diffPath, data.getBuffer());
+        }
 
-  return pixelsChanged;
+        resolve(misMatchPercent);
+      });
+  });
 }
 
 function sanitize(url) {

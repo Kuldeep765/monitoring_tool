@@ -1,12 +1,12 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
-import { saveCoords } from "./utils/storage.js";
-import { captureMaster } from "./utils/screenshot.js";
+import { getCoords, saveCoords } from "./utils/storage.js";
+import { captureMaster, captureLatest } from "./utils/screenshot.js";
 import proxyRoute from "./routes/proxy.js";
 import { runFullComparison } from "./utils/compare.js";
-
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,7 +18,6 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-
 app.use("/proxy", proxyRoute);
 
 // Homepage to enter URL
@@ -64,7 +63,6 @@ app.post("/api/save", async (req, res) => {
   }
 });
 
-
 app.get("/run-compare", async (req, res) => {
   try {
     const message = await runFullComparison();
@@ -76,13 +74,5 @@ app.get("/run-compare", async (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
-});
-
-
-app.listen(3000, () => {
   console.log("🚀 Backend running on http://localhost:3000");
 });
-
-
-
