@@ -2,78 +2,85 @@ const canvas = document.getElementById("selectorCanvas");
 const iframe = document.getElementById("webview");
 const selections = [];
 
-canvas.width = iframe.offsetWidth;
-canvas.height = iframe.offsetHeight;
-canvas.style.position = "absolute";
-canvas.style.top = iframe.offsetTop + "px";
-canvas.style.left = iframe.offsetLeft + "px";
-canvas.style.zIndex = 999;
-
 const ctx = canvas.getContext("2d");
 let isDrawing = false;
 let startX, startY;
 
+// Update canvas size and position relative to iframe
+function updateCanvasSizeAndPosition() {
+  const iframeRect = iframe.getBoundingClientRect();
+
+  canvas.width = iframeRect.width;
+  canvas.height = iframeRect.height;
+
+  canvas.style.position = "absolute";
+  canvas.style.top = iframeRect.top + window.scrollY + "px";
+  canvas.style.left = iframeRect.left + window.scrollX + "px";
+  canvas.style.zIndex = 9999;
+}
+
+updateCanvasSizeAndPosition();
+
+window.addEventListener("resize", updateCanvasSizeAndPosition);
+window.addEventListener("scroll", updateCanvasSizeAndPosition);
+
+// Get mouse coordinates relative to canvas
+function getRelativeCoords(e) {
+  const canvasRect = canvas.getBoundingClientRect();
+  return {
+    x: e.clientX - canvasRect.left,
+    y: e.clientY - canvasRect.top,
+  };
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  isDrawing = true;
+  const coords = getRelativeCoords(e);
+  startX = coords.x;
+  startY = coords.y;
+});
+
 canvas.addEventListener("mousemove", (e) => {
   if (!isDrawing) return;
-  const currentX = e.pageX;
-  const currentY = e.pageY;
+  const coords = getRelativeCoords(e);
+  const currentX = coords.x;
+  const currentY = coords.y;
 
   const width = currentX - startX;
   const height = currentY - startY;
 
-  canvas.style.left = window.scrollX + "px";
-  canvas.style.top = window.scrollY + "px";
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
-  ctx.strokeRect(
-    startX - window.scrollX,
-    startY - window.scrollY,
-    width,
-    height
-  );
-});
-
-canvas.addEventListener("mousedown", (e) => {
-  isDrawing = true;
-  startX = e.pageX;
-  startY = e.pageY;
+  ctx.strokeRect(startX, startY, width, height);
 });
 
 canvas.addEventListener("mouseup", (e) => {
+  if (!isDrawing) return;
   isDrawing = false;
-  const endX = e.pageX;
-  const endY = e.pageY;
 
+  const coords = getRelativeCoords(e);
+  const endX = coords.x;
+  const endY = coords.y;
+
+  const left = Math.min(startX, endX);
+  const top = Math.min(startY, endY);
   const width = Math.abs(endX - startX);
   const height = Math.abs(endY - startY);
 
-  const rect = {
-    left: Math.min(startX, endX) - iframe.offsetLeft + window.scrollX,
-    top: Math.min(startY, endY) - iframe.offsetTop + window.scrollY,
-    width,
-    height,
-  };
-
   if (width > 0 && height > 0) {
-    selections.push(rect);
+    selections.push({ left, top, width, height });
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = "red";
   ctx.lineWidth = 2;
   for (const sel of selections) {
-    ctx.strokeRect(
-      sel.left - window.scrollX,
-      sel.top - window.scrollY,
-      sel.width,
-      sel.height
-    );
+    ctx.strokeRect(sel.left, sel.top, sel.width, sel.height);
   }
 });
 
-
+// Save button click handler
 document.getElementById("saveBtn").addEventListener("click", async () => {
   if (selections.length === 0) {
     alert("Please select at least one region.");
@@ -91,3 +98,5 @@ document.getElementById("saveBtn").addEventListener("click", async () => {
     alert("Failed to save.");
   }
 });
+
+ 

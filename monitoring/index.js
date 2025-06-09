@@ -5,6 +5,8 @@ import { fileURLToPath } from "url";
 import { saveCoords } from "./utils/storage.js";
 import { captureMaster } from "./utils/screenshot.js";
 import proxyRoute from "./routes/proxy.js";
+import { runFullComparison } from "./utils/compare.js";
+
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,16 +65,20 @@ app.post("/api/save", async (req, res) => {
 });
 
 
-app.get("/compare", async (req, res) => {
-  const url = req.query.url;
-  const selections = await getCoords(url);
-  await compareScreens(url, selections);
-
-  const diffFiles = (await fs.promises.readdir("data/diffs")).filter((f) =>
-    f.endsWith(".png")
-  );
-  res.render("result", { files: diffFiles });
+app.get("/run-compare", async (req, res) => {
+  try {
+    const message = await runFullComparison();
+    res.send(message);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("❌ Comparison failed: " + error.message);
+  }
 });
+
+app.listen(3000, () => {
+  console.log("Server running on http://localhost:3000");
+});
+
 
 app.listen(3000, () => {
   console.log("🚀 Backend running on http://localhost:3000");
