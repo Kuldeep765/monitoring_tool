@@ -4,7 +4,11 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { getCoords, saveCoords } from "./utils/storage.js";
-import { captureMaster, captureLatest } from "./utils/screenshot.js";
+import {
+  captureMaster,
+  captureLatest,
+  captureMasterWithScroll,
+} from "./utils/screenshot.js";
 import proxyRoute from "./routes/proxy.js";
 import { runFullComparison } from "./utils/compare.js";
 
@@ -47,14 +51,22 @@ app.get("/", async (req, res) => {
 });
 
 app.post("/api/save", async (req, res) => {
-  const { url, selections } = req.body;
+  const { url, selections, iframeScroll } = req.body;
 
   if (!selections || selections.length === 0) {
     return res.status(400).send("No selections provided");
   }
 
+  let regionData = {};
   try {
-    const regionData = await captureMaster(url, selections); // Now returns [{id, coords, imageurl}]
+    console.log("Received selections:", selections);
+    console.log("Iframe scroll position:", iframeScroll);
+
+    if (iframeScroll && (iframeScroll.scrollX || iframeScroll.scrollY)) {
+      regionData = await captureMasterWithScroll(url, selections, iframeScroll);
+    } else {
+      regionData = await captureMaster(url, selections);
+    }
     await saveCoords(url, regionData);
     res.sendStatus(200);
   } catch (err) {
