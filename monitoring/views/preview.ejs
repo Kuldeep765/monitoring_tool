@@ -173,7 +173,7 @@
         src="/proxy?url=<%= encodeURIComponent(url) %>"
         sandbox="allow-scripts allow-same-origin allow-forms"
       ></iframe>
-      <canvas id="selectorCanvas"></canvas>
+      <!-- <canvas id="selectorCanvas"></canvas> -->
     </div>
     <div class="controls-section">
       <div class="current-url-display">
@@ -191,21 +191,12 @@
         <button id="switchUrlBtn" class="btn btn-warning">
           <span class="icon">🔄</span>Switch URL
         </button>
-        <button id="clearBtn" class="btn btn-secondary">
+        <!-- <button id="clearBtn" class="btn btn-secondary">
           <span class="icon">🗑️</span>Clear Selections
-        </button>
+        </button> -->
         <button id="comparebtn" class="btn btn-secondary">
           <span class="icon">📊</span>Compare
         </button>
-      </div>
-      <div style="margin-top: 10px">
-        <span id="selectionStatus" class="text-muted"
-          >0 region(s) selected</span
-        >
-        <small class="text-muted" style="margin-left: 15px">
-          💡 Drag to select regions • Right-click to delete • Esc to cancel •
-          Ctrl+S to save
-        </small>
       </div>
 
       <div id="urlInputSection" class="url-input-section">
