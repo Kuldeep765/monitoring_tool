@@ -52,33 +52,34 @@ app.get("/", async (req, res) => {
 
 app.post("/api/load-url", async (req, res) => {
   const { url } = req.body;
-  
+
   if (!url || !/^https?:\/\//.test(url)) {
     return res.status(400).json({ error: "Invalid URL format" });
   }
-  
+
   try {
     // Test if URL is accessible
     const response = await fetch(url, {
-      method: 'HEAD',
+      method: "HEAD",
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       url: url,
-      message: "URL is accessible" 
+      message: "URL is accessible",
     });
   } catch (error) {
     console.error("URL validation error:", error);
-    res.status(400).json({ 
-      error: `Cannot access URL: ${error.message}` 
+    res.status(400).json({
+      error: `Cannot access URL: ${error.message}`,
     });
   }
 });
@@ -108,21 +109,21 @@ app.post("/api/save", async (req, res) => {
       console.log("📸 Capturing without scroll offset...");
       regionData = await captureMaster(url, selections);
     }
-    
+
     await saveCoords(url, regionData);
-    
+
     console.log("✅ Successfully saved monitoring data");
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Saved ${selections.length} region(s) for monitoring`,
       url: url,
-      regionsCount: selections.length
+      regionsCount: selections.length,
     });
   } catch (err) {
     console.error("❌ Save error:", err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to save or capture screenshots",
-      details: err.message 
+      details: err.message,
     });
   }
 });
@@ -143,11 +144,11 @@ app.get("/api/monitored-urls", async (req, res) => {
 // Route to delete monitoring for a specific URL
 app.delete("/api/monitored-urls", async (req, res) => {
   const { url } = req.body;
-  
+
   if (!url) {
     return res.status(400).json({ error: "URL is required" });
   }
-  
+
   try {
     // You'll need to implement this in your storage.js
     await deleteMonitoredUrl(url);
@@ -158,7 +159,6 @@ app.delete("/api/monitored-urls", async (req, res) => {
   }
 });
 
-// Helper function to get monitored URLs (add to storage.js)
 async function getMonitoredUrls() {
   // This is a placeholder - implement based on your storage system
   try {

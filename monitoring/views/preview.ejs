@@ -78,6 +78,15 @@
         background-color: #218838;
       }
 
+      .btn-warning {
+        background-color: #ffc107;
+        color: #212529;
+      }
+
+      .btn-warning:hover {
+        background-color: #e0a800;
+      }
+
       .icon {
         margin-right: 5px;
       }
@@ -95,17 +104,30 @@
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .url-item:hover {
+        background-color: #e9ecef;
       }
 
       .url-item.active {
         background-color: #e3f2fd;
         border-color: #2196f3;
+        box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
       }
 
       .url-text {
         flex: 1;
         margin-right: 10px;
         font-size: 14px;
+        cursor: pointer;
+      }
+
+      .url-text:hover {
+        color: #007bff;
+        text-decoration: underline;
       }
 
       .btn-small {
@@ -117,12 +139,48 @@
         color: #6c757d;
         font-size: 12px;
       }
+
+      .current-url-display {
+        background-color: #e8f5e8;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        border-left: 4px solid #28a745;
+      }
+
+      .current-url-display strong {
+        color: #155724;
+      }
+
+      .loading-state {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      #webview.loading {
+        opacity: 0.5;
+      }
     </style>
   </head>
   <body>
     <h2>Select Regions to Monitor</h2>
 
+    <div id="frame-container">
+      <iframe
+        width="100%"
+        height="600px"
+        id="webview"
+        src="/proxy?url=<%= encodeURIComponent(url) %>"
+        sandbox="allow-scripts allow-same-origin allow-forms"
+      ></iframe>
+      <canvas id="selectorCanvas"></canvas>
+    </div>
     <div class="controls-section">
+      <div class="current-url-display">
+        <strong>Currently Monitoring:</strong>
+        <span id="currentUrlDisplay"><%= url %></span>
+      </div>
+
       <div class="input-group">
         <button id="saveBtn" class="btn btn-success">
           <span class="icon">💾</span>Save Selection
@@ -130,8 +188,14 @@
         <button id="addUrlBtn" class="btn btn-primary">
           <span class="icon">➕</span>Add URL
         </button>
+        <button id="switchUrlBtn" class="btn btn-warning">
+          <span class="icon">🔄</span>Switch URL
+        </button>
         <button id="clearBtn" class="btn btn-secondary">
           <span class="icon">🗑️</span>Clear Selections
+        </button>
+        <button id="comparebtn" class="btn btn-secondary">
+          <span class="icon">📊</span>Compare
         </button>
       </div>
       <div style="margin-top: 10px">
@@ -159,57 +223,58 @@
         </div>
 
         <div id="urlList" class="url-list">
-          <h5>Monitored URLs:</h5>
-          <div class="url-item active">
+          <h5>All URLs:</h5>
+          <div class="url-item active" data-url="<%= url %>">
             <span class="url-text"><%= url %></span>
-            <button
-              class="btn btn-small btn-secondary"
-              onclick="removeUrl(this)"
-            >
-              Remove
-            </button>
+            <div>
+              <button
+                class="btn btn-small btn-secondary"
+                onclick="removeUrl(this)"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
-
-    <div id="frame-container">
-      <iframe
-        width="100%"
-        height="600px"
-        id="webview"
-        src="/proxy?url=<%= encodeURIComponent(url) %>"
-        sandbox="allow-scripts allow-same-origin allow-forms"
-      ></iframe>
-      <canvas id="selectorCanvas"></canvas>
-    </div>
-
     <script>
       let url = "<%= url %>";
       console.log("Original URL:", url);
 
-      // Store monitored URLs
+      // Store monitored URLs and their selections separately
       let monitoredUrls = [url];
       let currentUrl = url;
+      let urlSelections = {}; // Store selections per URL
+      urlSelections[url] = []; // Initialize selections for current URL
 
       // DOM elements
       const addUrlBtn = document.getElementById("addUrlBtn");
+      const switchUrlBtn = document.getElementById("switchUrlBtn");
       const urlInputSection = document.getElementById("urlInputSection");
       const newUrlInput = document.getElementById("newUrlInput");
       const loadUrlBtn = document.getElementById("loadUrlBtn");
       const cancelUrlBtn = document.getElementById("cancelUrlBtn");
       const webview = document.getElementById("webview");
       const urlList = document.getElementById("urlList");
+      const currentUrlDisplay = document.getElementById("currentUrlDisplay");
 
-      // Show/hide URL input section
+      // Show/hide URL input section for adding new URLs
       addUrlBtn.addEventListener("click", function () {
+        urlInputSection.classList.add("show");
+        newUrlInput.focus();
+        updateUrlListDisplay();
+      });
+
+      // Show/hide URL input section for switching URLs
+      switchUrlBtn.addEventListener("click", function () {
         urlInputSection.classList.toggle("show");
         if (urlInputSection.classList.contains("show")) {
-          newUrlInput.focus();
+          updateUrlListDisplay();
         }
       });
 
-      // Cancel adding URL
+      // Cancel adding/switching URL
       cancelUrlBtn.addEventListener("click", function () {
         urlInputSection.classList.remove("show");
         newUrlInput.value = "";
@@ -233,6 +298,7 @@
         // Show loading state
         loadUrlBtn.disabled = true;
         loadUrlBtn.textContent = "Loading...";
+        webview.classList.add("loading");
 
         try {
           // Test URL accessibility
@@ -251,11 +317,12 @@
           // Add to monitored URLs if not already present
           if (!monitoredUrls.includes(newUrl)) {
             monitoredUrls.push(newUrl);
+            urlSelections[newUrl] = []; // Initialize selections for new URL
             addUrlToList(newUrl);
           }
 
           // Load the new URL in iframe
-          loadUrlInFrame(newUrl);
+          await loadUrlInFrame(newUrl);
 
           // Hide input section and clear input
           urlInputSection.classList.remove("show");
@@ -266,6 +333,7 @@
           // Restore button state
           loadUrlBtn.disabled = false;
           loadUrlBtn.textContent = "Load URL";
+          webview.classList.remove("loading");
         }
       });
 
@@ -276,46 +344,139 @@
         }
       });
 
-      // Function to load URL in iframe
-      function loadUrlInFrame(targetUrl) {
+      // Function to load URL in iframe with proper selection management
+      async function loadUrlInFrame(targetUrl) {
+        console.log("🔄 Switching from", currentUrl, "to", targetUrl);
+
+        // Save current selections before switching
+        if (window.getSelections) {
+          urlSelections[currentUrl] = window.getSelections();
+          console.log(
+            "💾 Saved selections for",
+            currentUrl,
+            ":",
+            urlSelections[currentUrl]
+          );
+        }
+
+        // Update current URL
         currentUrl = targetUrl;
-        url = targetUrl; // Update the global url variable for overlay.js
-        webview.src = `/proxy?url=${encodeURIComponent(targetUrl)}`;
+        url = targetUrl; // Update global url variable for overlay.js
+        window.url = targetUrl; // Also set on window object
 
-        // Update active URL in list
-        document.querySelectorAll(".url-item").forEach((item) => {
-          item.classList.remove("active");
-          if (item.querySelector(".url-text").textContent === targetUrl) {
-            item.classList.add("active");
-          }
-        });
+        // Update display
+        currentUrlDisplay.textContent = targetUrl;
 
-        // Clear existing selections when switching URLs
+        // Clear current selections and load URL in iframe
         if (window.clearSelections) {
           window.clearSelections();
         }
 
-        console.log("Loading URL:", targetUrl);
+        // Load iframe
+        webview.src = `/proxy?url=${encodeURIComponent(targetUrl)}`;
+
+        // Wait for iframe to load then restore selections for this URL
+        await new Promise((resolve) => {
+          const onLoad = () => {
+            webview.removeEventListener("load", onLoad);
+            setTimeout(() => {
+              // Restore selections for this URL
+              if (
+                urlSelections[targetUrl] &&
+                urlSelections[targetUrl].length > 0
+              ) {
+                console.log(
+                  "🔄 Restoring selections for",
+                  targetUrl,
+                  ":",
+                  urlSelections[targetUrl]
+                );
+                if (window.setSelections) {
+                  window.setSelections(urlSelections[targetUrl]);
+                }
+              }
+              resolve();
+            }, 500); // Small delay to ensure iframe is fully loaded
+          };
+          webview.addEventListener("load", onLoad);
+        });
+
+        // Update active URL in list
+        updateActiveUrlInList(targetUrl);
+
+        console.log("✅ Successfully switched to:", targetUrl);
       }
 
       // Function to add URL to the list
       function addUrlToList(newUrl) {
         const urlItem = document.createElement("div");
         urlItem.className = "url-item";
+        urlItem.setAttribute("data-url", newUrl);
         urlItem.innerHTML = `
           <span class="url-text">${newUrl}</span>
           <div>
-            <button class="btn btn-small btn-primary" onclick="loadUrlInFrame('${newUrl}')">Load</button>
             <button class="btn btn-small btn-secondary" onclick="removeUrl(this)">Remove</button>
           </div>
         `;
+
+        // Add click handler to URL text for switching
+        urlItem.querySelector(".url-text").addEventListener("click", () => {
+          if (currentUrl !== newUrl) {
+            loadUrlInFrame(newUrl);
+          }
+        });
+
         urlList.appendChild(urlItem);
       }
 
+      // Function to update URL list display
+      function updateUrlListDisplay() {
+        // Clear existing list except the header
+        const existingItems = urlList.querySelectorAll(".url-item");
+        existingItems.forEach((item) => item.remove());
+
+        // Re-add all URLs
+        monitoredUrls.forEach((url) => {
+          const urlItem = document.createElement("div");
+          urlItem.className = "url-item";
+          urlItem.setAttribute("data-url", url);
+          if (url === currentUrl) {
+            urlItem.classList.add("active");
+          }
+
+          urlItem.innerHTML = `
+            <span class="url-text">${url}</span>
+            <div>
+              <button class="btn btn-small btn-secondary" onclick="removeUrl(this)">Remove</button>
+            </div>
+          `;
+
+          // Add click handler to URL text for switching
+          urlItem.querySelector(".url-text").addEventListener("click", () => {
+            if (currentUrl !== url) {
+              loadUrlInFrame(url);
+              urlInputSection.classList.remove("show");
+            }
+          });
+
+          urlList.appendChild(urlItem);
+        });
+      }
+
+      // Function to update active URL in list
+      function updateActiveUrlInList(activeUrl) {
+        document.querySelectorAll(".url-item").forEach((item) => {
+          item.classList.remove("active");
+          if (item.getAttribute("data-url") === activeUrl) {
+            item.classList.add("active");
+          }
+        });
+      }
+
       // Function to remove URL from list
-      function removeUrl(button) {
+      window.removeUrl = function (button) {
         const urlItem = button.closest(".url-item");
-        const urlText = urlItem.querySelector(".url-text").textContent;
+        const urlText = urlItem.getAttribute("data-url");
 
         // Don't remove if it's the only URL
         if (monitoredUrls.length <= 1) {
@@ -323,10 +484,11 @@
           return;
         }
 
-        // Remove from array
+        // Remove from array and selections
         const index = monitoredUrls.indexOf(urlText);
         if (index > -1) {
           monitoredUrls.splice(index, 1);
+          delete urlSelections[urlText];
         }
 
         // If removing current URL, load the first available URL
@@ -336,13 +498,45 @@
 
         // Remove from DOM
         urlItem.remove();
-      }
+      };
 
       // Enhanced save functionality
       document.getElementById("saveBtn").addEventListener("click", function () {
-        // This will be handled by overlay.js
-        console.log("Save button clicked for URL:", currentUrl);
+        // Get current selections and save them
+        if (window.getSelections) {
+          const currentSelections = window.getSelections();
+          if (currentSelections.length === 0) {
+            alert("Please select at least one region to monitor.");
+            return;
+          }
+
+          // Update stored selections
+          urlSelections[currentUrl] = currentSelections;
+          console.log(
+            "💾 Saving selections for",
+            currentUrl,
+            ":",
+            currentSelections
+          );
+
+          // Trigger save via overlay.js
+          if (window.saveSelections) {
+            window.saveSelections();
+          }
+        }
       });
+
+      // Initialize URL list display
+      updateUrlListDisplay();
+
+      console.log(
+        "🎯 Enhanced preview.ejs loaded with improved URL management!"
+      );
+      document
+        .getElementById("comparebtn")
+        .addEventListener("click", function () {
+          window.location.href = "/run-compare";
+        });
     </script>
 
     <script src="/js/overlay.js"></script>

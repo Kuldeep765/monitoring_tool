@@ -1,6 +1,6 @@
 const canvas = document.getElementById("selectorCanvas");
 const iframe = document.getElementById("webview");
-const selections = [];
+let selections = [];
 
 const ctx = canvas.getContext("2d");
 let isDrawing = false;
@@ -84,16 +84,77 @@ function redrawSelections() {
       ctx.strokeRect(canvasCoords.x, canvasCoords.y, displayWidth, displayHeight);
     }
   }
+  
+  // Update status display
+  updateSelectionStatus();
 }
 
 // Clear selections function (exposed globally)
 window.clearSelections = function() {
+  console.log("🗑️ Clearing selections");
   selections.length = 0;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateSelectionStatus();
+};
+
+// Get current selections (exposed globally)
+window.getSelections = function() {
+  return [...selections]; // Return a copy
+};
+
+// Set selections (exposed globally) - for restoring when switching URLs
+window.setSelections = function(newSelections) {
+  console.log("🔄 Setting selections:", newSelections);
+  selections = [...newSelections]; // Create a copy
+  redrawSelections();
+};
+
+// Save selections function (exposed globally)
+window.saveSelections = async function() {
+  if (selections.length === 0) {
+    alert("Please select at least one region to monitor.");
+    return;
+  }
+
+  // Get current URL
+  const currentUrl = window.url || url;
+  console.log("💾 Saving selections for URL:", currentUrl);
+  console.log("Selections:", selections);
+  
+  // Get current iframe scroll position to send to server
+  const iframeScroll = getIframeScrollPosition();
+  
+  try {
+    const response = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        url: currentUrl, 
+        selections,
+        iframeScroll
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      alert(`✅ Saved successfully!\n\nURL: ${currentUrl}\nRegions: ${selections.length}\nScreenshots captured.`);
+      
+      // Optionally clear selections after successful save
+      // window.clearSelections();
+    } else {
+      const error = await response.json();
+      alert(`❌ Failed to save: ${error.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error("Save error:", error);
+    alert(`❌ Network error: ${error.message}`);
+  }
 };
 
 // Listen for iframe scroll events to update selection display
 iframe.addEventListener('load', function() {
+  console.log("🌐 Iframe loaded, setting up scroll listeners");
+  
   try {
     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
     iframeDoc.addEventListener('scroll', redrawSelections);
@@ -102,8 +163,8 @@ iframe.addEventListener('load', function() {
     console.warn("Cannot listen to iframe scroll events (CORS):", e);
   }
   
-  // Clear selections when new URL loads
-  window.clearSelections();
+  // Don't automatically clear selections on load - let the parent handle this
+  // The parent will decide whether to clear or restore selections
 });
 
 canvas.addEventListener("mousedown", (e) => {
@@ -143,10 +204,11 @@ canvas.addEventListener("mouseup", (e) => {
   const width = Math.abs(endX - startX);
   const height = Math.abs(endY - startY);
 
-  if (width > 0 && height > 0) {
+  if (width > 5 && height > 5) { // Minimum size threshold
     // Convert canvas coordinates to webpage coordinates
     const webpageCoords = canvasToWebpageCoords(canvasLeft, canvasTop);
     
+    console.log("➕ Adding selection:");
     console.log("Canvas coords:", { left: canvasLeft, top: canvasTop, width, height });
     console.log("Webpage coords:", { left: webpageCoords.x, top: webpageCoords.y, width, height });
     console.log("Iframe scroll:", getIframeScrollPosition());
@@ -164,47 +226,8 @@ canvas.addEventListener("mouseup", (e) => {
 
 // Clear selections button
 document.getElementById("clearBtn")?.addEventListener("click", () => {
-  window.clearSelections();
-});
-
-// Save button click handler - Updated to work with dynamic URLs
-document.getElementById("saveBtn").addEventListener("click", async () => {
-  if (selections.length === 0) {
-    alert("Please select at least one region to monitor.");
-    return;
-  }
-
-  // Get current URL (should be updated by the URL management system)
-  const currentUrl = window.url || url;
-  console.log("Saving selections for URL:", currentUrl);
-  console.log("Selections:", selections);
-  
-  // Get current iframe scroll position to send to server
-  const iframeScroll = getIframeScrollPosition();
-  
-  try {
-    const response = await fetch("/api/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        url: currentUrl, 
-        selections,
-        iframeScroll
-      }),
-    });
-
-    if (response.ok) {
-      alert(`✅ Saved successfully!\n\nURL: ${currentUrl}\nRegions: ${selections.length}\nScreenshots captured.`);
-      
-      // Optionally clear selections after successful save
-      // window.clearSelections();
-    } else {
-      const error = await response.text();
-      alert(`❌ Failed to save: ${error}`);
-    }
-  } catch (error) {
-    console.error("Save error:", error);
-    alert(`❌ Network error: ${error.message}`);
+  if (selections.length > 0 && confirm("Clear all selections for this URL?")) {
+    window.clearSelections();
   }
 });
 
@@ -225,6 +248,7 @@ canvas.addEventListener("contextmenu", (e) => {
   
   if (clickedSelectionIndex !== -1) {
     if (confirm("Delete this selection region?")) {
+      console.log("🗑️ Deleting selection:", selections[clickedSelectionIndex]);
       selections.splice(clickedSelectionIndex, 1);
       redrawSelections();
     }
@@ -249,20 +273,9 @@ document.addEventListener("keydown", (e) => {
   // Ctrl+S to save (prevent default browser save)
   if (e.ctrlKey && e.key === "s") {
     e.preventDefault();
-    document.getElementById("saveBtn").click();
+    window.saveSelections();
   }
 });
-
-// Debug function to show current coordinates and scroll position
-function debugCoordinates() {
-  const iframeScroll = getIframeScrollPosition();
-  console.log("Current iframe scroll:", iframeScroll);
-  console.log("Current selections:", selections);
-  console.log("Current URL:", window.url || url);
-}
-
-// Add debug button if it exists
-document.getElementById("debugBtn")?.addEventListener("click", debugCoordinates);
 
 // Status display
 function updateSelectionStatus() {
@@ -272,17 +285,26 @@ function updateSelectionStatus() {
   }
 }
 
-// Update status when selections change
-const originalPush = selections.push;
-selections.push = function(...args) {
-  const result = originalPush.apply(this, args);
-  updateSelectionStatus();
-  return result;
-};
+// Debug function to show current coordinates and scroll position
+function debugCoordinates() {
+  const iframeScroll = getIframeScrollPosition();
+  console.log("📊 Debug Info:");
+  console.log("Current iframe scroll:", iframeScroll);
+  console.log("Current selections:", selections);
+  console.log("Current URL:", window.url || url);
+  console.log("Canvas size:", { width: canvas.width, height: canvas.height });
+}
 
-// Initial status update
+// Add debug button if it exists
+document.getElementById("debugBtn")?.addEventListener("click", debugCoordinates);
+
+// Initial setup
 document.addEventListener("DOMContentLoaded", () => {
   updateSelectionStatus();
+  console.log("🎯 Enhanced overlay.js loaded - Ready for region selection!");
 });
 
-console.log("🎯 Enhanced overlay.js loaded - Ready for region selection!");
+// Expose debug function globally for testing
+window.debugCoordinates = debugCoordinates;
+
+console.log("🎯 Enhanced overlay.js loaded with improved selection management!");
