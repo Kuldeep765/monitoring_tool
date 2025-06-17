@@ -86,6 +86,12 @@ function redrawSelections() {
   }
 }
 
+// Clear selections function (exposed globally)
+window.clearSelections = function() {
+  selections.length = 0;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+};
+
 // Listen for iframe scroll events to update selection display
 iframe.addEventListener('load', function() {
   try {
@@ -95,6 +101,9 @@ iframe.addEventListener('load', function() {
   } catch (e) {
     console.warn("Cannot listen to iframe scroll events (CORS):", e);
   }
+  
+  // Clear selections when new URL loads
+  window.clearSelections();
 });
 
 canvas.addEventListener("mousedown", (e) => {
@@ -155,37 +164,92 @@ canvas.addEventListener("mouseup", (e) => {
 
 // Clear selections button
 document.getElementById("clearBtn")?.addEventListener("click", () => {
-  selections.length = 0;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  window.clearSelections();
 });
 
-// Save button click handler
+// Save button click handler - Updated to work with dynamic URLs
 document.getElementById("saveBtn").addEventListener("click", async () => {
   if (selections.length === 0) {
-    alert("Please select at least one region.");
+    alert("Please select at least one region to monitor.");
     return;
   }
 
-  console.log("Saving selections:", selections);
+  // Get current URL (should be updated by the URL management system)
+  const currentUrl = window.url || url;
+  console.log("Saving selections for URL:", currentUrl);
+  console.log("Selections:", selections);
   
   // Get current iframe scroll position to send to server
   const iframeScroll = getIframeScrollPosition();
   
-  const response = await fetch("/api/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      url, 
-      selections,
-      iframeScroll
-    }),
-  });
+  try {
+    const response = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        url: currentUrl, 
+        selections,
+        iframeScroll
+      }),
+    });
 
-  if (response.ok) {
-    alert("Saved! Screenshots captured.");
-  } else {
-    const error = await response.text();
-    alert(`Failed to save: ${error}`);
+    if (response.ok) {
+      alert(`✅ Saved successfully!\n\nURL: ${currentUrl}\nRegions: ${selections.length}\nScreenshots captured.`);
+      
+      // Optionally clear selections after successful save
+      // window.clearSelections();
+    } else {
+      const error = await response.text();
+      alert(`❌ Failed to save: ${error}`);
+    }
+  } catch (error) {
+    console.error("Save error:", error);
+    alert(`❌ Network error: ${error.message}`);
+  }
+});
+
+// Add right-click context menu to delete individual selections
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  
+  const coords = getRelativeCoords(e);
+  const webpageCoords = canvasToWebpageCoords(coords.x, coords.y);
+  
+  // Find if click is inside any selection
+  const clickedSelectionIndex = selections.findIndex(sel => {
+    return webpageCoords.x >= sel.left && 
+           webpageCoords.x <= sel.left + sel.width &&
+           webpageCoords.y >= sel.top && 
+           webpageCoords.y <= sel.top + sel.height;
+  });
+  
+  if (clickedSelectionIndex !== -1) {
+    if (confirm("Delete this selection region?")) {
+      selections.splice(clickedSelectionIndex, 1);
+      redrawSelections();
+    }
+  }
+});
+
+// Add keyboard shortcuts
+document.addEventListener("keydown", (e) => {
+  // Escape key to clear current drawing
+  if (e.key === "Escape" && isDrawing) {
+    isDrawing = false;
+    redrawSelections();
+  }
+  
+  // Delete key to clear all selections
+  if (e.key === "Delete" && !isDrawing) {
+    if (selections.length > 0 && confirm("Clear all selections?")) {
+      window.clearSelections();
+    }
+  }
+  
+  // Ctrl+S to save (prevent default browser save)
+  if (e.ctrlKey && e.key === "s") {
+    e.preventDefault();
+    document.getElementById("saveBtn").click();
   }
 });
 
@@ -194,7 +258,31 @@ function debugCoordinates() {
   const iframeScroll = getIframeScrollPosition();
   console.log("Current iframe scroll:", iframeScroll);
   console.log("Current selections:", selections);
+  console.log("Current URL:", window.url || url);
 }
 
 // Add debug button if it exists
-document.getElementById("debugBtn")?.addEvent
+document.getElementById("debugBtn")?.addEventListener("click", debugCoordinates);
+
+// Status display
+function updateSelectionStatus() {
+  const statusElement = document.getElementById("selectionStatus");
+  if (statusElement) {
+    statusElement.textContent = `${selections.length} region(s) selected`;
+  }
+}
+
+// Update status when selections change
+const originalPush = selections.push;
+selections.push = function(...args) {
+  const result = originalPush.apply(this, args);
+  updateSelectionStatus();
+  return result;
+};
+
+// Initial status update
+document.addEventListener("DOMContentLoaded", () => {
+  updateSelectionStatus();
+});
+
+console.log("🎯 Enhanced overlay.js loaded - Ready for region selection!");

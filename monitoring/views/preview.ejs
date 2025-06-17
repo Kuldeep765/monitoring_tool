@@ -2,15 +2,178 @@
 <html>
   <head>
     <title>Select Regions</title>
-    <!-- FIXED: Proper MIME type specification -->
     <link rel="stylesheet" type="text/css" href="/css/styles.css" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      .controls-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+      }
+
+      .url-input-section {
+        display: none;
+        margin-top: 15px;
+        padding: 15px;
+        background-color: #fff;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+      }
+
+      .url-input-section.show {
+        display: block;
+      }
+
+      .input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .url-input {
+        flex: 1;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      .btn {
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .btn-primary {
+        background-color: #007bff;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background-color: #0056b3;
+      }
+
+      .btn-secondary {
+        background-color: #6c757d;
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background-color: #545b62;
+      }
+
+      .btn-success {
+        background-color: #28a745;
+        color: white;
+      }
+
+      .btn-success:hover {
+        background-color: #218838;
+      }
+
+      .icon {
+        margin-right: 5px;
+      }
+
+      .url-list {
+        margin-top: 15px;
+      }
+
+      .url-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+      }
+
+      .url-item.active {
+        background-color: #e3f2fd;
+        border-color: #2196f3;
+      }
+
+      .url-text {
+        flex: 1;
+        margin-right: 10px;
+        font-size: 14px;
+      }
+
+      .btn-small {
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+
+      .text-muted {
+        color: #6c757d;
+        font-size: 12px;
+      }
+    </style>
   </head>
   <body>
     <h2>Select Regions to Monitor</h2>
+
+    <div class="controls-section">
+      <div class="input-group">
+        <button id="saveBtn" class="btn btn-success">
+          <span class="icon">💾</span>Save Selection
+        </button>
+        <button id="addUrlBtn" class="btn btn-primary">
+          <span class="icon">➕</span>Add URL
+        </button>
+        <button id="clearBtn" class="btn btn-secondary">
+          <span class="icon">🗑️</span>Clear Selections
+        </button>
+      </div>
+      <div style="margin-top: 10px">
+        <span id="selectionStatus" class="text-muted"
+          >0 region(s) selected</span
+        >
+        <small class="text-muted" style="margin-left: 15px">
+          💡 Drag to select regions • Right-click to delete • Esc to cancel •
+          Ctrl+S to save
+        </small>
+      </div>
+
+      <div id="urlInputSection" class="url-input-section">
+        <h4>Add New URL to Monitor</h4>
+        <div class="input-group">
+          <input
+            type="text"
+            id="newUrlInput"
+            class="url-input"
+            placeholder="https://example.com"
+            required
+          />
+          <button id="loadUrlBtn" class="btn btn-primary">Load URL</button>
+          <button id="cancelUrlBtn" class="btn btn-secondary">Cancel</button>
+        </div>
+
+        <div id="urlList" class="url-list">
+          <h5>Monitored URLs:</h5>
+          <div class="url-item active">
+            <span class="url-text"><%= url %></span>
+            <button
+              class="btn btn-small btn-secondary"
+              onclick="removeUrl(this)"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="frame-container">
-      <!-- FIXED: Use your proxy URL correctly -->
       <iframe
         width="100%"
         height="600px"
@@ -20,13 +183,168 @@
       ></iframe>
       <canvas id="selectorCanvas"></canvas>
     </div>
-    <button id="saveBtn">Save Selection</button>
- 
+
     <script>
-      const url = "<%= url %>";
+      let url = "<%= url %>";
       console.log("Original URL:", url);
+
+      // Store monitored URLs
+      let monitoredUrls = [url];
+      let currentUrl = url;
+
+      // DOM elements
+      const addUrlBtn = document.getElementById("addUrlBtn");
+      const urlInputSection = document.getElementById("urlInputSection");
+      const newUrlInput = document.getElementById("newUrlInput");
+      const loadUrlBtn = document.getElementById("loadUrlBtn");
+      const cancelUrlBtn = document.getElementById("cancelUrlBtn");
+      const webview = document.getElementById("webview");
+      const urlList = document.getElementById("urlList");
+
+      // Show/hide URL input section
+      addUrlBtn.addEventListener("click", function () {
+        urlInputSection.classList.toggle("show");
+        if (urlInputSection.classList.contains("show")) {
+          newUrlInput.focus();
+        }
+      });
+
+      // Cancel adding URL
+      cancelUrlBtn.addEventListener("click", function () {
+        urlInputSection.classList.remove("show");
+        newUrlInput.value = "";
+      });
+
+      // Load new URL
+      loadUrlBtn.addEventListener("click", async function () {
+        const newUrl = newUrlInput.value.trim();
+
+        if (!newUrl) {
+          alert("Please enter a valid URL");
+          return;
+        }
+
+        // Basic URL validation
+        if (!newUrl.startsWith("http://") && !newUrl.startsWith("https://")) {
+          alert("URL must start with http:// or https://");
+          return;
+        }
+
+        // Show loading state
+        loadUrlBtn.disabled = true;
+        loadUrlBtn.textContent = "Loading...";
+
+        try {
+          // Test URL accessibility
+          const response = await fetch("/api/load-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: newUrl }),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || "Failed to load URL");
+          }
+
+          // Add to monitored URLs if not already present
+          if (!monitoredUrls.includes(newUrl)) {
+            monitoredUrls.push(newUrl);
+            addUrlToList(newUrl);
+          }
+
+          // Load the new URL in iframe
+          loadUrlInFrame(newUrl);
+
+          // Hide input section and clear input
+          urlInputSection.classList.remove("show");
+          newUrlInput.value = "";
+        } catch (error) {
+          alert(`❌ Failed to load URL: ${error.message}`);
+        } finally {
+          // Restore button state
+          loadUrlBtn.disabled = false;
+          loadUrlBtn.textContent = "Load URL";
+        }
+      });
+
+      // Handle Enter key in input
+      newUrlInput.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+          loadUrlBtn.click();
+        }
+      });
+
+      // Function to load URL in iframe
+      function loadUrlInFrame(targetUrl) {
+        currentUrl = targetUrl;
+        url = targetUrl; // Update the global url variable for overlay.js
+        webview.src = `/proxy?url=${encodeURIComponent(targetUrl)}`;
+
+        // Update active URL in list
+        document.querySelectorAll(".url-item").forEach((item) => {
+          item.classList.remove("active");
+          if (item.querySelector(".url-text").textContent === targetUrl) {
+            item.classList.add("active");
+          }
+        });
+
+        // Clear existing selections when switching URLs
+        if (window.clearSelections) {
+          window.clearSelections();
+        }
+
+        console.log("Loading URL:", targetUrl);
+      }
+
+      // Function to add URL to the list
+      function addUrlToList(newUrl) {
+        const urlItem = document.createElement("div");
+        urlItem.className = "url-item";
+        urlItem.innerHTML = `
+          <span class="url-text">${newUrl}</span>
+          <div>
+            <button class="btn btn-small btn-primary" onclick="loadUrlInFrame('${newUrl}')">Load</button>
+            <button class="btn btn-small btn-secondary" onclick="removeUrl(this)">Remove</button>
+          </div>
+        `;
+        urlList.appendChild(urlItem);
+      }
+
+      // Function to remove URL from list
+      function removeUrl(button) {
+        const urlItem = button.closest(".url-item");
+        const urlText = urlItem.querySelector(".url-text").textContent;
+
+        // Don't remove if it's the only URL
+        if (monitoredUrls.length <= 1) {
+          alert("Cannot remove the last monitored URL");
+          return;
+        }
+
+        // Remove from array
+        const index = monitoredUrls.indexOf(urlText);
+        if (index > -1) {
+          monitoredUrls.splice(index, 1);
+        }
+
+        // If removing current URL, load the first available URL
+        if (currentUrl === urlText) {
+          loadUrlInFrame(monitoredUrls[0]);
+        }
+
+        // Remove from DOM
+        urlItem.remove();
+      }
+
+      // Enhanced save functionality
+      document.getElementById("saveBtn").addEventListener("click", function () {
+        // This will be handled by overlay.js
+        console.log("Save button clicked for URL:", currentUrl);
+      });
     </script>
+
     <script src="/js/overlay.js"></script>
   </body>
 </html>
- 
