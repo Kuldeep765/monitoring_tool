@@ -57,7 +57,6 @@ export async function runFullComparison() {
       .build();
 
     try {
-      console.log(`🌐 Loading page: ${url}`);
       await driver.get(url);
       await delay(5000);
 
@@ -90,7 +89,6 @@ export async function runFullComparison() {
             diffImagePath
           );
 
-          console.log(`🧠 Compared ${uuid}: ${mismatchPercent}% mismatch.`);
         } catch (err) {
           console.error(`❌ Error comparing images for ${uuid}:`, err.message);
         }

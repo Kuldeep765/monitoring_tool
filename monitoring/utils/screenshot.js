@@ -29,7 +29,6 @@ const getBaseDir = () => {
 function extractDecodedUrl(proxyUrl) {
   try {
     const urlObj = new URL(proxyUrl);
-    console.log("urlObj", urlObj);
     const encoded = urlObj.searchParams.get("url");
     return decodeURIComponent(encoded);
   } catch (error) {
@@ -45,7 +44,6 @@ export async function captureMaster(url, coords) {
   const result = [];
 
   if (!coords || coords.length === 0) {
-    console.log("No coords to capture.");
     return result;
   }
 
@@ -143,7 +141,6 @@ export async function captureLatest(url) {
 }
 
 export default async function compareScreens(url) {
-  console.log("Comparing screenshot regions...");
 
   const decodedUrl = extractDecodedUrl(url);
   if (!decodedUrl) return;
@@ -160,7 +157,6 @@ export default async function compareScreens(url) {
     // Assuming region.coords = { left, top, width, height }
     const { left, top, width, height } = region.coords;
 
-    console.log(`Processing region ${id}:`, region.coords);
 
     // Bounds check to avoid "bad extract area"
     if (
@@ -213,9 +209,7 @@ export default async function compareScreens(url) {
       await fs.mkdir("data/diffs", { recursive: true });
       await fs.writeFile(`data/diffs/${id}-diff.png`, PNG.sync.write(png));
 
-      console.log(
-        `Saved diff image for region ${id}, diff pixels: ${diffPixels}`
-      );
+    
     } catch (error) {
       console.error(`Error processing region ${id}:`, error);
     }
@@ -226,7 +220,6 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
   const result = [];
 
   if (!coords || coords.length === 0) {
-    console.log("No coords to capture.");
     return result;
   }
 

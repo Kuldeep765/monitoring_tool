@@ -231,7 +231,6 @@
     </div>
     <script>
       let url = "<%= url %>";
-      console.log("Original URL:", url);
 
       // Store monitored URLs and their selections separately
       let monitoredUrls = [url];
@@ -337,17 +336,11 @@
 
       // Function to load URL in iframe with proper selection management
       async function loadUrlInFrame(targetUrl) {
-        console.log("🔄 Switching from", currentUrl, "to", targetUrl);
 
         // Save current selections before switching
         if (window.getSelections) {
           urlSelections[currentUrl] = window.getSelections();
-          console.log(
-            "💾 Saved selections for",
-            currentUrl,
-            ":",
-            urlSelections[currentUrl]
-          );
+        
         }
 
         // Update current URL
@@ -376,12 +369,7 @@
                 urlSelections[targetUrl] &&
                 urlSelections[targetUrl].length > 0
               ) {
-                console.log(
-                  "🔄 Restoring selections for",
-                  targetUrl,
-                  ":",
-                  urlSelections[targetUrl]
-                );
+               
                 if (window.setSelections) {
                   window.setSelections(urlSelections[targetUrl]);
                 }
@@ -395,7 +383,6 @@
         // Update active URL in list
         updateActiveUrlInList(targetUrl);
 
-        console.log("✅ Successfully switched to:", targetUrl);
       }
 
       // Function to add URL to the list
@@ -503,12 +490,7 @@
 
           // Update stored selections
           urlSelections[currentUrl] = currentSelections;
-          console.log(
-            "💾 Saving selections for",
-            currentUrl,
-            ":",
-            currentSelections
-          );
+        
 
           // Trigger save via overlay.js
           if (window.saveSelections) {
@@ -519,10 +501,6 @@
 
       // Initialize URL list display
       updateUrlListDisplay();
-
-      console.log(
-        "🎯 Enhanced preview.ejs loaded with improved URL management!"
-      );
       document
         .getElementById("comparebtn")
         .addEventListener("click", function () {

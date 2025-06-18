@@ -98,21 +98,16 @@ app.post("/api/save", async (req, res) => {
 
   let regionData = {};
   try {
-    console.log(`🎯 Saving ${selections.length} regions for URL: ${url}`);
-    console.log("Selections:", selections);
-    console.log("Iframe scroll position:", iframeScroll);
+   
 
     if (iframeScroll && (iframeScroll.scrollX || iframeScroll.scrollY)) {
-      console.log("📸 Capturing with scroll offset...");
       regionData = await captureMasterWithScroll(url, selections, iframeScroll);
     } else {
-      console.log("📸 Capturing without scroll offset...");
       regionData = await captureMaster(url, selections);
     }
 
     await saveCoords(url, regionData);
 
-    console.log("✅ Successfully saved monitoring data");
     res.json({
       success: true,
       message: `Saved ${selections.length} region(s) for monitoring`,
@@ -120,7 +115,6 @@ app.post("/api/save", async (req, res) => {
       regionsCount: selections.length,
     });
   } catch (err) {
-    console.error("❌ Save error:", err);
     res.status(500).json({
       error: "Failed to save or capture screenshots",
       details: err.message,

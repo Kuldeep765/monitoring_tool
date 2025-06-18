@@ -5,7 +5,6 @@
   let startX, startY;
 
   iframe.addEventListener("load", () => {
-    console.log("🌐 Iframe loaded, injecting canvas");
 
     try {
       const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
@@ -259,4 +258,3 @@
       // Restore selections if any (already handled in preview.ejs)
     }, 300);
   });
-  console.log("🎯 overlay.js — ready inside iframe!");
