@@ -1,25 +1,49 @@
-import fs from "fs";
+import fs from "fs/promises"; // for async/await file I/O
+import fsSync from "fs";
+import path from "path";
 import sharp from "sharp";
 import { Builder } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import resemble from "resemblejs";
-
-const ensureDirExists = (dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
-
+import { getBaseDir } from "./screenshot.js";
 async function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getLatestRegionFolder() {
+  const dataDir = path.join(process.cwd(), "data");
+  const folders = fsSync.readdirSync(dataDir).filter((f) => {
+    const fullPath = path.join(dataDir, f);
+    return (
+      fsSync.statSync(fullPath).isDirectory() &&
+      fsSync.existsSync(path.join(fullPath, "regions.json"))
+    );
+  });
+
+  if (folders.length === 0) {
+    throw new Error("No valid folders with regions.json found in /data");
+  }
+
+  folders.sort(); // oldest to newest
+  return path.join(dataDir, folders[folders.length - 1]); // latest
+}
+function ensureDirExistsSync(dirPath) {
+  if (!fsSync.existsSync(dirPath)) {
+    fsSync.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
 export async function runFullComparison() {
-  const regionsDataRaw = fs.readFileSync("data/master/regions.json", "utf-8");
+  const baseDir = getLatestRegionFolder();
+  const regionsPath = path.join(baseDir, "regions.json");
+  const regionsDataRaw = await fs.readFile(regionsPath, "utf-8");
   const regionsData = JSON.parse(regionsDataRaw);
 
-  ensureDirExists("data/new");
-  ensureDirExists("data/diffs");
+  const newDir = path.join(baseDir, "new");
+  const diffsDir = path.join(baseDir, "diffs");
+
+  ensureDirExistsSync(newDir);
+  ensureDirExistsSync(diffsDir);
 
   for (const url in regionsData) {
     const driver = await new Builder()
@@ -35,20 +59,19 @@ export async function runFullComparison() {
     try {
       console.log(`🌐 Loading page: ${url}`);
       await driver.get(url);
-      await delay(5000); // wait for full load
+      await delay(5000);
 
       const fullScreenshotBase64 = await driver.takeScreenshot();
-      const fullScreenshotPath = `data/new/full-${sanitize(url)}.png`;
-      fs.writeFileSync(fullScreenshotPath, fullScreenshotBase64, "base64");
+      const fullScreenshotPath = path.join(newDir, `full-${sanitize(url)}.png`);
+      await fs.writeFile(fullScreenshotPath, fullScreenshotBase64, "base64");
 
       const regions = regionsData[url].regions;
 
       for (const uuid in regions) {
         const { coords, imageurl } = regions[uuid];
 
-        const masterImagePath = imageurl;
-        const newImagePath = `data/new/${uuid}.png`;
-        const diffImagePath = `data/diffs/${uuid}.png`;
+        const newImagePath = path.join(newDir, `${uuid}.png`);
+        const diffImagePath = path.join(diffsDir, `${uuid}.png`);
 
         await sharp(fullScreenshotPath)
           .extract({
@@ -59,17 +82,14 @@ export async function runFullComparison() {
           })
           .toFile(newImagePath);
 
-        if (!fs.existsSync(masterImagePath)) {
-          console.warn(`⚠️ Missing master image: ${masterImagePath}`);
-          continue;
-        }
-
         try {
+          const masterImagePath = imageurl;
           const mismatchPercent = await compareScreenshots(
             masterImagePath,
             newImagePath,
             diffImagePath
           );
+
           console.log(`🧠 Compared ${uuid}: ${mismatchPercent}% mismatch.`);
         } catch (err) {
           console.error(`❌ Error comparing images for ${uuid}:`, err.message);
@@ -84,7 +104,6 @@ export async function runFullComparison() {
 
   return "✅ Full comparison completed for all URLs.";
 }
-
 function compareScreenshots(imgPath1, imgPath2, diffPath) {
   return new Promise((resolve, reject) => {
     const image1 = fs.readFileSync(imgPath1);

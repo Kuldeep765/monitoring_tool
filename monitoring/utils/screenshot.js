@@ -1,4 +1,3 @@
-// utils/screenshot.js
 import { Builder } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
 import fs from "fs/promises";
@@ -8,6 +7,39 @@ import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+
+let cachedBaseDir = null;
+const getBaseDir = () => {
+  if (cachedBaseDir) return cachedBaseDir;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate().toString().padStart(2, "0");
+  const hours = now.getHours();
+  const minutes = now.getMinutes().toString().padStart(2, "0");
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  const timestamp = `${year}-${month}-${day}_${hour12}-${minutes}-${ampm}`;
+  console.log("timestamp", timestamp);
+  cachedBaseDir = `data/${timestamp}`;
+  return cachedBaseDir;
+};
+
+function extractDecodedUrl(proxyUrl) {
+  try {
+    const urlObj = new URL(proxyUrl);
+    console.log("urlObj", urlObj);
+    const encoded = urlObj.searchParams.get("url");
+    return decodeURIComponent(encoded);
+  } catch (error) {
+    console.error("Invalid proxy URL:", proxyUrl);
+    return null;
+  }
+}
+
+const baseDir = getBaseDir();
+await fs.mkdir(baseDir, { recursive: true });
 
 export async function captureMaster(url, coords) {
   const result = [];
@@ -39,7 +71,7 @@ export async function captureMaster(url, coords) {
     const imgBase64 = await driver.takeScreenshot();
     const buffer = Buffer.from(imgBase64, "base64");
 
-    await fs.mkdir("data/master", { recursive: true });
+    await fs.mkdir(baseDir, { recursive: true });
 
     const newRegions = {};
     for (const region of coords) {
@@ -53,7 +85,7 @@ export async function captureMaster(url, coords) {
       if (scaled.width === 0 || scaled.height === 0) continue;
 
       const id = uuidv4();
-      const filePath = `data/master/${id}.png`;
+      const filePath = `${baseDir}/${id}.png`;
 
       await sharp(buffer).extract(scaled).toFile(filePath);
 
@@ -63,30 +95,28 @@ export async function captureMaster(url, coords) {
       };
     }
 
-    // Read existing data
+    const decodedUrl = extractDecodedUrl(url);
+    if (!decodedUrl) return result;
+
     let existingData = {};
     try {
-      const raw = await fs.readFile("data/master/regions.json", "utf-8");
+      const raw = await fs.readFile(`${baseDir}/regions.json`, "utf-8");
       existingData = JSON.parse(raw);
     } catch (e) {
       // No file yet, it's okay
     }
 
-    // Merge into correct URL group
-    if (!existingData[url]) {
-      existingData[url] = {
-        regions: {},
-      };
+    if (!existingData[decodedUrl]) {
+      existingData[decodedUrl] = { regions: {} };
     }
 
-    existingData[url].regions = {
-      ...existingData[url].regions,
+    existingData[decodedUrl].regions = {
+      ...existingData[decodedUrl].regions,
       ...newRegions,
     };
 
-    // Save updated structure
     await fs.writeFile(
-      "data/master/regions.json",
+      `${baseDir}/regions.json`,
       JSON.stringify(existingData, null, 2)
     );
 
@@ -115,9 +145,11 @@ export async function captureLatest(url) {
 export default async function compareScreens(url) {
   console.log("Comparing screenshot regions...");
 
-  // Load the master data from regions.json
-  const raw = await fs.readFile("data/master/regions.json", "utf-8");
-  const regionData = JSON.parse(raw)[url]?.regions || {};
+  const decodedUrl = extractDecodedUrl(url);
+  if (!decodedUrl) return;
+
+  const raw = await fs.readFile(`${baseDir}/regions.json`, "utf-8");
+  const regionData = JSON.parse(raw)[decodedUrl]?.regions || {};
 
   // Read latest full screenshot (data/latest.png)
   const latestBuffer = await fs.readFile("data/latest.png");
@@ -151,7 +183,6 @@ export default async function compareScreens(url) {
         .resize(width, height)
         .raw()
         .toBuffer({ resolveWithObject: true });
-
       // Extract & get raw pixels for latest image region
       const latest = await sharp(latestBuffer)
         .extract({ left, top, width, height })
@@ -178,6 +209,8 @@ export default async function compareScreens(url) {
         height: master.info.height,
       });
       png.data = diff;
+
+      await fs.mkdir("data/diffs", { recursive: true });
       await fs.writeFile(`data/diffs/${id}-diff.png`, PNG.sync.write(png));
 
       console.log(
@@ -213,15 +246,11 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
     await driver.get(url);
     await delay(5000);
 
-    // Scroll to match the iframe's scroll position
     if (iframeScroll && (iframeScroll.scrollX || iframeScroll.scrollY)) {
       await driver.executeScript(
         `window.scrollTo(${iframeScroll.scrollX}, ${iframeScroll.scrollY})`
       );
-      await delay(2000); // Wait for scroll to complete
-      console.log(
-        `Scrolled to position: ${iframeScroll.scrollX}, ${iframeScroll.scrollY}`
-      );
+      await delay(2000);
     }
 
     const scrollInfo = await driver.executeScript(`
@@ -234,25 +263,16 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
       };
     `);
 
-    console.log("Browser scroll position after adjustment:", scrollInfo);
-
     const dpr = scrollInfo.devicePixelRatio;
     const imgBase64 = await driver.takeScreenshot();
     const buffer = Buffer.from(imgBase64, "base64");
 
-    // Get image metadata to check bounds
     const metadata = await sharp(buffer).metadata();
-    console.log(
-      `Screenshot dimensions: ${metadata.width}x${metadata.height}, DPR: ${dpr}`
-    );
 
-    await fs.mkdir("data/master", { recursive: true });
+    await fs.mkdir(baseDir, { recursive: true });
 
     const newRegions = {};
     for (const region of coords) {
-      console.log(`Processing region:`, region);
-
-      // Validate input coordinates
       if (
         !region ||
         typeof region.left !== "number" ||
@@ -260,12 +280,9 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
         typeof region.width !== "number" ||
         typeof region.height !== "number"
       ) {
-        console.warn("Invalid region data:", region);
         continue;
       }
 
-      // Since we've scrolled the browser to match iframe scroll,
-      // we need to adjust coordinates to be relative to viewport
       const adjustedCoords = {
         left: region.left - scrollInfo.scrollX,
         top: region.top - scrollInfo.scrollY,
@@ -273,20 +290,12 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
         height: region.height,
       };
 
-      console.log(`Original coords:`, region);
-      console.log(`Adjusted for viewport:`, adjustedCoords);
-
-      // Check if the region is actually visible in the current viewport
       if (
         adjustedCoords.left + adjustedCoords.width < 0 ||
         adjustedCoords.top + adjustedCoords.height < 0 ||
         adjustedCoords.left > scrollInfo.viewportWidth ||
         adjustedCoords.top > scrollInfo.viewportHeight
       ) {
-        console.warn(
-          `Skipping region - not visible in current viewport:`,
-          adjustedCoords
-        );
         continue;
       }
 
@@ -297,89 +306,61 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
         height: Math.round(adjustedCoords.height * dpr),
       };
 
-      // Bounds checking
-      if (scaled.width <= 0 || scaled.height <= 0) {
-        console.warn(
-          `Skipping region - invalid dimensions: ${scaled.width}x${scaled.height}`
-        );
+      if (scaled.width <= 0 || scaled.height <= 0) continue;
+      if (scaled.left >= metadata.width || scaled.top >= metadata.height)
         continue;
-      }
 
-      if (scaled.left >= metadata.width || scaled.top >= metadata.height) {
-        console.warn(
-          `Skipping region - coordinates out of bounds: left=${scaled.left}, top=${scaled.top}`
-        );
-        continue;
-      }
-
-      // Adjust dimensions if they extend beyond image bounds
       if (scaled.left + scaled.width > metadata.width) {
         scaled.width = metadata.width - scaled.left;
-        console.warn(`Adjusted width to fit image bounds: ${scaled.width}`);
       }
 
       if (scaled.top + scaled.height > metadata.height) {
         scaled.height = metadata.height - scaled.top;
-        console.warn(`Adjusted height to fit image bounds: ${scaled.height}`);
       }
 
-      // Final check after adjustments
-      if (scaled.width <= 0 || scaled.height <= 0) {
-        console.warn(
-          `Skipping region after bounds adjustment - invalid dimensions`
-        );
-        continue;
-      }
+      if (scaled.width <= 0 || scaled.height <= 0) continue;
 
       try {
         const id = uuidv4();
-        const filePath = `data/master/${id}.png`;
-
-        console.log(
-          `Extracting region: left=${scaled.left}, top=${scaled.top}, width=${scaled.width}, height=${scaled.height}`
-        );
+        const filePath = `${baseDir}/${id}.png`;
 
         await sharp(buffer).extract(scaled).toFile(filePath);
 
         newRegions[id] = {
-          coords: region, // Store original document-relative coordinates
+          coords: region,
           imageurl: filePath,
         };
-
-        console.log(`Successfully saved region ${id} to ${filePath}`);
       } catch (extractError) {
         console.error(`Failed to extract region:`, extractError);
-        console.error(`Region data:`, scaled);
         continue;
       }
     }
 
-    // Save regions data
+    const decodedUrl = extractDecodedUrl(url);
+    if (!decodedUrl) return result;
+
     let existingData = {};
     try {
-      const raw = await fs.readFile("data/master/regions.json", "utf-8");
+      const raw = await fs.readFile(`${baseDir}/regions.json`, "utf-8");
       existingData = JSON.parse(raw);
-    } catch (e) {
-      console.log("No existing regions.json file, creating new one");
+    } catch {
+      // no file, okay
     }
 
-    if (!existingData[url]) {
-      existingData[url] = {
-        regions: {},
-      };
+    if (!existingData[decodedUrl]) {
+      existingData[decodedUrl] = { regions: {} };
     }
 
-    existingData[url].regions = {
-      ...existingData[url].regions,
+    existingData[decodedUrl].regions = {
+      ...existingData[decodedUrl].regions,
       ...newRegions,
     };
 
     await fs.writeFile(
-      "data/master/regions.json",
+      `${baseDir}/regions.json`,
       JSON.stringify(existingData, null, 2)
     );
 
-    console.log(`Saved ${Object.keys(newRegions).length} regions for ${url}`);
     return result;
   } catch (err) {
     console.error("Failed to capture screenshot:", err);
@@ -388,4 +369,4 @@ export async function captureMasterWithScroll(url, coords, iframeScroll) {
     await driver.quit();
   }
 }
- 
+export { getBaseDir };
