@@ -38,7 +38,6 @@
         );
         resizeCanvas();
 
-        // Utility to redraw current selections
         function redrawSelections() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.strokeStyle = "red";

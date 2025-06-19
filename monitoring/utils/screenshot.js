@@ -37,10 +37,10 @@ function extractDecodedUrl(proxyUrl) {
   }
 }
 
-const baseDir = getBaseDir();
-await fs.mkdir(baseDir, { recursive: true });
-
 export async function captureMaster(url, coords) {
+  const baseDir = getBaseDir();
+  await fs.mkdir(baseDir, { recursive: true });
+
   const result = [];
 
   if (!coords || coords.length === 0) {
@@ -141,7 +141,6 @@ export async function captureLatest(url) {
 }
 
 export default async function compareScreens(url) {
-
   const decodedUrl = extractDecodedUrl(url);
   if (!decodedUrl) return;
 
@@ -156,7 +155,6 @@ export default async function compareScreens(url) {
   for (const [id, region] of Object.entries(regionData)) {
     // Assuming region.coords = { left, top, width, height }
     const { left, top, width, height } = region.coords;
-
 
     // Bounds check to avoid "bad extract area"
     if (
@@ -208,8 +206,6 @@ export default async function compareScreens(url) {
 
       await fs.mkdir("data/diffs", { recursive: true });
       await fs.writeFile(`data/diffs/${id}-diff.png`, PNG.sync.write(png));
-
-    
     } catch (error) {
       console.error(`Error processing region ${id}:`, error);
     }
@@ -217,6 +213,9 @@ export default async function compareScreens(url) {
 }
 
 export async function captureMasterWithScroll(url, coords, iframeScroll) {
+  const baseDir = getBaseDir();
+  await fs.mkdir(baseDir, { recursive: true });
+
   const result = [];
 
   if (!coords || coords.length === 0) {
